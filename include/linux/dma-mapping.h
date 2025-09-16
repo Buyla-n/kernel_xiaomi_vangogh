@@ -11,6 +11,7 @@
 #include <linux/scatterlist.h>
 #include <linux/bug.h>
 #include <linux/mem_encrypt.h>
+#include <linux/android_kabi.h>
 
 /**
  * List of possible attributes associated with a DMA mapping. The semantics
@@ -62,55 +63,56 @@
  * allocation failure reports (similarly to __GFP_NOWARN).
  */
 #define DMA_ATTR_NO_WARN	(1UL << 8)
-/*
- * DMA_ATTR_STRONGLY_ORDERED: Specifies that accesses to the mapping must
- * not be buffered, reordered, merged with other accesses, or unaligned.
- * No speculative access may occur in this mapping.
- */
-#define DMA_ATTR_STRONGLY_ORDERED	(1UL << 9)
-/*
- * DMA_ATTR_SKIP_ZEROING: Do not zero mapping.
- */
-#define DMA_ATTR_SKIP_ZEROING		(1UL << 10)
-/*
- * DMA_ATTR_NO_DELAYED_UNMAP: Used by msm specific lazy mapping to indicate
- * that the mapping can be freed on unmap, rather than when the ion_buffer
- * is freed.
- */
-#define DMA_ATTR_NO_DELAYED_UNMAP	(1UL << 11)
-/*
- * DMA_ATTR_EXEC_MAPPING: The mapping has executable permissions.
- */
-#define DMA_ATTR_EXEC_MAPPING		(1UL << 12)
-/*
- * DMA_ATTR_IOMMU_USE_UPSTREAM_HINT: Normally an smmu will override any bus
- * attributes (i.e cacheablilty) provided by the client device. Some hardware
- * may be designed to use the original attributes instead.
- */
-#define DMA_ATTR_IOMMU_USE_UPSTREAM_HINT	(1UL << 13)
-/*
- * When passed to a DMA map call the DMA_ATTR_FORCE_COHERENT DMA
- * attribute can be used to force a buffer to be mapped as IO coherent.
- */
-#define DMA_ATTR_FORCE_COHERENT			(1UL << 14)
-/*
- * When passed to a DMA map call the DMA_ATTR_FORCE_NON_COHERENT DMA
- * attribute can be used to force a buffer to not be mapped as IO
- * coherent.
- */
-#define DMA_ATTR_FORCE_NON_COHERENT		(1UL << 15)
-/*
- * DMA_ATTR_DELAYED_UNMAP: Used by ION, it will ensure that mappings are not
- * removed on unmap but instead are removed when the ion_buffer is freed.
- */
-#define DMA_ATTR_DELAYED_UNMAP		(1UL << 16)
 
 /*
  * DMA_ATTR_PRIVILEGED: used to indicate that the buffer is fully
  * accessible at an elevated privilege level (and ideally inaccessible or
  * at least read-only at lesser-privileged levels).
  */
-#define DMA_ATTR_PRIVILEGED		(1UL << 17)
+#define DMA_ATTR_PRIVILEGED		(1UL << 9)
+
+/*
+ * DMA_ATTR_STRONGLY_ORDERED: Specifies that accesses to the mapping must
+ * not be buffered, reordered, merged with other accesses, or unaligned.
+ * No speculative access may occur in this mapping.
+ */
+#define DMA_ATTR_STRONGLY_ORDERED	(1UL << 10)
+/*
+ * DMA_ATTR_SKIP_ZEROING: Do not zero mapping.
+ */
+#define DMA_ATTR_SKIP_ZEROING		(1UL << 11)
+/*
+ * DMA_ATTR_NO_DELAYED_UNMAP: Used by msm specific lazy mapping to indicate
+ * that the mapping can be freed on unmap, rather than when the ion_buffer
+ * is freed.
+ */
+#define DMA_ATTR_NO_DELAYED_UNMAP	(1UL << 12)
+/*
+ * DMA_ATTR_EXEC_MAPPING: The mapping has executable permissions.
+ */
+#define DMA_ATTR_EXEC_MAPPING		(1UL << 13)
+/*
+ * DMA_ATTR_IOMMU_USE_UPSTREAM_HINT: Normally an smmu will override any bus
+ * attributes (i.e cacheablilty) provided by the client device. Some hardware
+ * may be designed to use the original attributes instead.
+ */
+#define DMA_ATTR_IOMMU_USE_UPSTREAM_HINT	(1UL << 14)
+/*
+ * When passed to a DMA map call the DMA_ATTR_FORCE_COHERENT DMA
+ * attribute can be used to force a buffer to be mapped as IO coherent.
+ */
+#define DMA_ATTR_FORCE_COHERENT			(1UL << 15)
+/*
+ * When passed to a DMA map call the DMA_ATTR_FORCE_NON_COHERENT DMA
+ * attribute can be used to force a buffer to not be mapped as IO
+ * coherent.
+ */
+#define DMA_ATTR_FORCE_NON_COHERENT		(1UL << 16)
+/*
+ * DMA_ATTR_DELAYED_UNMAP: Used by ION, it will ensure that mappings are not
+ * removed on unmap but instead are removed when the ion_buffer is freed.
+ */
+#define DMA_ATTR_DELAYED_UNMAP		(1UL << 17)
 
 /*
  * DMA_ATTR_IOMMU_USE_LLC_NWA: Overrides the bus attributes to use the System
@@ -189,6 +191,11 @@ struct dma_map_ops {
 #ifdef ARCH_HAS_DMA_GET_REQUIRED_MASK
 	u64 (*get_required_mask)(struct device *dev);
 #endif
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	ANDROID_KABI_RESERVE(3);
+	ANDROID_KABI_RESERVE(4);
 };
 
 extern const struct dma_map_ops dma_direct_ops;
@@ -765,8 +772,7 @@ static inline unsigned int dma_get_max_seg_size(struct device *dev)
 	return SZ_64K;
 }
 
-static inline unsigned int dma_set_max_seg_size(struct device *dev,
-						unsigned int size)
+static inline int dma_set_max_seg_size(struct device *dev, unsigned int size)
 {
 	if (dev->dma_parms) {
 		dev->dma_parms->max_segment_size = size;

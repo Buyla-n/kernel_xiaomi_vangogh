@@ -25,26 +25,8 @@
 #include <linux/net.h>
 #include <net/regulatory.h>
 
-/* Backport support for DFS offload */
-#define CFG80211_DFS_OFFLOAD_BACKPORT 1
-
 /* Indicate support for including KEK length in rekey data */
 #define CFG80211_REKEY_DATA_KEK_LEN 1
-
-/* Indicate backport support for FILS SK offload in cfg80211 */
-#define CFG80211_FILS_SK_OFFLOAD_SUPPORT 1
-
-/* Indicate backport support for external authentication*/
-#define CFG80211_EXTERNAL_AUTH_SUPPORT 1
-
-/* Indicate backport support for external authentication in AP mode */
-#define CFG80211_EXTERNAL_AUTH_AP_SUPPORT 1
-
-/* Indicate support for reporting rx FCS in cfg80211 */
-#define CFG80211_RX_FCS_ERROR_REPORTING_SUPPORT 1
-
-/* Indicate backport support for DH IE creation/update*/
-#define CFG80211_EXTERNAL_DH_UPDATE_SUPPORT 1
 
 /**
  * DOC: Introduction
@@ -446,6 +428,9 @@ ieee80211_get_sband_iftype_data(const struct ieee80211_supported_band *sband,
 
 	if (WARN_ON(iftype >= NL80211_IFTYPE_MAX))
 		return NULL;
+
+	if (iftype == NL80211_IFTYPE_AP_VLAN)
+		iftype = NL80211_IFTYPE_AP;
 
 	for (i = 0; i < sband->n_iftype_data; i++)  {
 		const struct ieee80211_sband_iftype_data *data =
@@ -2131,29 +2116,15 @@ struct cfg80211_bss {
 };
 
 /**
- * ieee80211_bss_get_elem - find element with given ID
- * @bss: the bss to search
- * @id: the element ID
- *
- * Note that the return value is an RCU-protected pointer, so
- * rcu_read_lock() must be held when calling this function.
- * Return: %NULL if not found.
- */
-const struct element *ieee80211_bss_get_elem(struct cfg80211_bss *bss, u8 id);
-
-/**
  * ieee80211_bss_get_ie - find IE with given ID
  * @bss: the bss to search
- * @id: the element ID
+ * @ie: the IE ID
  *
  * Note that the return value is an RCU-protected pointer, so
  * rcu_read_lock() must be held when calling this function.
  * Return: %NULL if not found.
  */
-static inline const u8 *ieee80211_bss_get_ie(struct cfg80211_bss *bss, u8 id)
-{
-	return (void *)ieee80211_bss_get_elem(bss, id);
-}
+const u8 *ieee80211_bss_get_ie(struct cfg80211_bss *bss, u8 ie);
 
 
 /**
@@ -3015,6 +2986,8 @@ struct cfg80211_update_owe_info {
  * @set_default_key: set the default key on an interface
  *
  * @set_default_mgmt_key: set the default management frame key on an interface
+
+ * @set_default_beacon_key: set the default Beacon frame key on an interface
  *
  * @set_rekey_data: give the data necessary for GTK rekeying to the driver
  *
@@ -3224,6 +3197,9 @@ struct cfg80211_update_owe_info {
  *
  * @start_radar_detection: Start radar detection in the driver.
  *
+ * @end_cac: End running CAC, probably because a related CAC
+ *	was finished on another phy.
+ *
  * @update_ft_ies: Provide updated Fast BSS Transition information to the
  *	driver. If the SME is in the driver/firmware, this information can be
  *	used in building Authentication and Reassociation Request frames.
@@ -3337,6 +3313,9 @@ struct cfg80211_ops {
 	int	(*set_default_mgmt_key)(struct wiphy *wiphy,
 					struct net_device *netdev,
 					u8 key_index);
+	int	(*set_default_beacon_key)(struct wiphy *wiphy,
+					  struct net_device *netdev,
+					  u8 key_index);
 
 	int	(*start_ap)(struct wiphy *wiphy, struct net_device *dev,
 			    struct cfg80211_ap_settings *settings);
@@ -3443,13 +3422,11 @@ struct cfg80211_ops {
 
 	void	(*rfkill_poll)(struct wiphy *wiphy);
 
-#ifdef CONFIG_NL80211_TESTMODE
 	int	(*testmode_cmd)(struct wiphy *wiphy, struct wireless_dev *wdev,
 				void *data, int len);
 	int	(*testmode_dump)(struct wiphy *wiphy, struct sk_buff *skb,
 				 struct netlink_callback *cb,
 				 void *data, int len);
-#endif
 
 	int	(*set_bitrate_mask)(struct wiphy *wiphy,
 				    struct net_device *dev,
@@ -3542,6 +3519,8 @@ struct cfg80211_ops {
 					 struct net_device *dev,
 					 struct cfg80211_chan_def *chandef,
 					 u32 cac_time_ms);
+	void	(*end_cac)(struct wiphy *wiphy,
+				struct net_device *dev);
 	int	(*update_ft_ies)(struct wiphy *wiphy, struct net_device *dev,
 				 struct cfg80211_update_ft_ies_params *ftie);
 	int	(*crit_proto_start)(struct wiphy *wiphy,
@@ -3984,6 +3963,21 @@ struct wiphy_iftype_ext_capab {
 };
 
 /**
+ * struct wiphy_iftype_akm_suites - This structure encapsulates supported akm
+ * suites for interface types defined in @iftypes_mask. Each type in the
+ * @iftypes_mask must be unique across all instances of iftype_akm_suites.
+ *
+ * @iftypes_mask: bitmask of interfaces types
+ * @akm_suites: points to an array of supported akm suites
+ * @n_akm_suites: number of supported AKM suites
+ */
+struct wiphy_iftype_akm_suites {
+	u16 iftypes_mask;
+	const u32 *akm_suites;
+	int n_akm_suites;
+};
+
+/**
  * struct wiphy - wireless hardware description
  * @reg_notifier: the driver's regulatory notification callback,
  *	note that if your driver uses wiphy_apply_custom_regulatory()
@@ -3995,6 +3989,12 @@ struct wiphy_iftype_ext_capab {
  * @signal_type: signal type reported in &struct cfg80211_bss.
  * @cipher_suites: supported cipher suites
  * @n_cipher_suites: number of supported cipher suites
+ * @iftype_akm_suites: array of supported akm suites info per interface type.
+ *	Note that the bits in @iftypes_mask inside this structure cannot
+ *	overlap (i.e. only one occurrence of each type is allowed across all
+ *	instances of iftype_akm_suites).
+ * @num_iftype_akm_suites: number of interface types for which supported akm
+ *	suites are specified separately.
  * @retry_short: Retry limit for short frames (dot11ShortRetryLimit)
  * @retry_long: Retry limit for long frames (dot11LongRetryLimit)
  * @frag_threshold: Fragmentation threshold (dot11FragmentationThreshold);
@@ -4153,7 +4153,6 @@ struct wiphy_iftype_ext_capab {
  * @support_only_he_mbssid: don't parse MBSSID elements if it is not
  *	HE AP, in order to avoid compatibility issues.
  *	@support_mbssid must be set for this to have any effect.
- *
  */
 struct wiphy {
 	/* assign these fields before you register the wiphy */
@@ -4197,6 +4196,9 @@ struct wiphy {
 
 	int n_cipher_suites;
 	const u32 *cipher_suites;
+
+	const struct wiphy_iftype_akm_suites *iftype_akm_suites;
+	unsigned int num_iftype_akm_suites;
 
 	u8 retry_short;
 	u8 retry_long;
@@ -4789,7 +4791,7 @@ unsigned int ieee80211_get_mesh_hdrlen(struct ieee80211s_hdr *meshhdr);
  */
 int ieee80211_data_to_8023_exthdr(struct sk_buff *skb, struct ethhdr *ehdr,
 				  const u8 *addr, enum nl80211_iftype iftype,
-				  u8 data_offset);
+				  u8 data_offset, bool is_amsdu);
 
 /**
  * ieee80211_data_to_8023 - convert an 802.11 data frame to 802.3
@@ -4801,7 +4803,7 @@ int ieee80211_data_to_8023_exthdr(struct sk_buff *skb, struct ethhdr *ehdr,
 static inline int ieee80211_data_to_8023(struct sk_buff *skb, const u8 *addr,
 					 enum nl80211_iftype iftype)
 {
-	return ieee80211_data_to_8023_exthdr(skb, NULL, addr, iftype, 0);
+	return ieee80211_data_to_8023_exthdr(skb, NULL, addr, iftype, 0, false);
 }
 
 /**
@@ -4835,33 +4837,6 @@ unsigned int cfg80211_classify8021d(struct sk_buff *skb,
 				    struct cfg80211_qos_map *qos_map);
 
 /**
- * cfg80211_find_elem_match - match information element and byte array in data
- *
- * @eid: element ID
- * @ies: data consisting of IEs
- * @len: length of data
- * @match: byte array to match
- * @match_len: number of bytes in the match array
- * @match_offset: offset in the IE data where the byte array should match.
- *	Note the difference to cfg80211_find_ie_match() which considers
- *	the offset to start from the element ID byte, but here we take
- *	the data portion instead.
- *
- * Return: %NULL if the element ID could not be found or if
- * the element is invalid (claims to be longer than the given
- * data) or if the byte array doesn't match; otherwise return the
- * requested element struct.
- *
- * Note: There are no checks on the element length other than
- * having to fit into the given data and being large enough for the
- * byte array to match.
- */
-const struct element *
-cfg80211_find_elem_match(u8 eid, const u8 *ies, unsigned int len,
-			 const u8 *match, unsigned int match_len,
-			 unsigned int match_offset);
-
-/**
  * cfg80211_find_ie_match - match information element and byte array in data
  *
  * @eid: element ID
@@ -4885,44 +4860,9 @@ cfg80211_find_elem_match(u8 eid, const u8 *ies, unsigned int len,
  * having to fit into the given data and being large enough for the
  * byte array to match.
  */
-static inline const u8 *
-cfg80211_find_ie_match(u8 eid, const u8 *ies, unsigned int len,
-		       const u8 *match, unsigned int match_len,
-		       unsigned int match_offset)
-{
-	/* match_offset can't be smaller than 2, unless match_len is
-	 * zero, in which case match_offset must be zero as well.
-	 */
-	if (WARN_ON((match_len && match_offset < 2) ||
-		    (!match_len && match_offset)))
-		return NULL;
-
-	return (void *)cfg80211_find_elem_match(eid, ies, len,
-						match, match_len,
-						match_offset ?
-							match_offset - 2 : 0);
-}
-
-/**
- * cfg80211_find_elem - find information element in data
- *
- * @eid: element ID
- * @ies: data consisting of IEs
- * @len: length of data
- *
- * Return: %NULL if the element ID could not be found or if
- * the element is invalid (claims to be longer than the given
- * data) or if the byte array doesn't match; otherwise return the
- * requested element struct.
- *
- * Note: There are no checks on the element length other than
- * having to fit into the given data.
- */
-static inline const struct element *
-cfg80211_find_elem(u8 eid, const u8 *ies, int len)
-{
-	return cfg80211_find_elem_match(eid, ies, len, NULL, 0, 0);
-}
+const u8 *cfg80211_find_ie_match(u8 eid, const u8 *ies, int len,
+				 const u8 *match, int match_len,
+				 int match_offset);
 
 /**
  * cfg80211_find_ie - find information element in data
@@ -4942,28 +4882,6 @@ cfg80211_find_elem(u8 eid, const u8 *ies, int len)
 static inline const u8 *cfg80211_find_ie(u8 eid, const u8 *ies, int len)
 {
 	return cfg80211_find_ie_match(eid, ies, len, NULL, 0, 0);
-}
-
-/**
- * cfg80211_find_ext_elem - find information element with EID Extension in data
- *
- * @ext_eid: element ID Extension
- * @ies: data consisting of IEs
- * @len: length of data
- *
- * Return: %NULL if the etended element could not be found or if
- * the element is invalid (claims to be longer than the given
- * data) or if the byte array doesn't match; otherwise return the
- * requested element struct.
- *
- * Note: There are no checks on the element length other than
- * having to fit into the given data.
- */
-static inline const struct element *
-cfg80211_find_ext_elem(u8 ext_eid, const u8 *ies, int len)
-{
-	return cfg80211_find_elem_match(WLAN_EID_EXTENSION, ies, len,
-					&ext_eid, 1, 0);
 }
 
 /**
@@ -4988,25 +4906,6 @@ static inline const u8 *cfg80211_find_ext_ie(u8 ext_eid, const u8 *ies, int len)
 }
 
 /**
- * cfg80211_find_vendor_elem - find vendor specific information element in data
- *
- * @oui: vendor OUI
- * @oui_type: vendor-specific OUI type (must be < 0xff), negative means any
- * @ies: data consisting of IEs
- * @len: length of data
- *
- * Return: %NULL if the vendor specific element ID could not be found or if the
- * element is invalid (claims to be longer than the given data); otherwise
- * return the element structure for the requested element.
- *
- * Note: There are no checks on the element length other than having to fit into
- * the given data.
- */
-const struct element *cfg80211_find_vendor_elem(unsigned int oui, int oui_type,
-						const u8 *ies,
-						unsigned int len);
-
-/**
  * cfg80211_find_vendor_ie - find vendor specific information element in data
  *
  * @oui: vendor OUI
@@ -5022,12 +4921,19 @@ const struct element *cfg80211_find_vendor_elem(unsigned int oui, int oui_type,
  * Note: There are no checks on the element length other than having to fit into
  * the given data.
  */
-static inline const u8 *
-cfg80211_find_vendor_ie(unsigned int oui, int oui_type,
-			const u8 *ies, unsigned int len)
-{
-	return (void *)cfg80211_find_vendor_elem(oui, oui_type, ies, len);
-}
+const u8 *cfg80211_find_vendor_ie(unsigned int oui, int oui_type,
+				  const u8 *ies, int len);
+
+/**
+ * cfg80211_send_layer2_update - send layer 2 update frame
+ *
+ * @dev: network device
+ * @addr: STA MAC address
+ *
+ * Wireless drivers can use this function to update forwarding tables in bridge
+ * devices upon STA association.
+ */
+void cfg80211_send_layer2_update(struct net_device *dev, const u8 *addr);
 
 /**
  * DOC: Regulatory enforcement infrastructure

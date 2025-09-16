@@ -162,10 +162,11 @@ enum iommu_attr {
 	DOMAIN_ATTR_EARLY_MAP,
 	DOMAIN_ATTR_PAGE_TABLE_IS_COHERENT,
 	DOMAIN_ATTR_PAGE_TABLE_FORCE_COHERENT,
-	DOMAIN_ATTR_CB_STALL_DISABLE,
 	DOMAIN_ATTR_BITMAP_IOVA_ALLOCATOR,
 	DOMAIN_ATTR_USE_LLC_NWA,
-	DOMAIN_ATTR_NO_CFRE,
+	DOMAIN_ATTR_FAULT_MODEL_NO_CFRE,
+	DOMAIN_ATTR_FAULT_MODEL_NO_STALL,
+	DOMAIN_ATTR_FAULT_MODEL_HUPCF,
 	DOMAIN_ATTR_MAX,
 };
 
@@ -251,7 +252,7 @@ struct iommu_ops {
 	size_t (*unmap)(struct iommu_domain *domain, unsigned long iova,
 		     size_t size);
 	size_t (*map_sg)(struct iommu_domain *domain, unsigned long iova,
-                        struct scatterlist *sg, unsigned int nents, int prot);
+			 struct scatterlist *sg, unsigned int nents, int prot);
 	void (*flush_iotlb_all)(struct iommu_domain *domain);
 	void (*iotlb_range_add)(struct iommu_domain *domain,
 				unsigned long iova, size_t size);
@@ -366,8 +367,10 @@ extern size_t iommu_unmap_fast(struct iommu_domain *domain,
 extern size_t iommu_map_sg(struct iommu_domain *domain, unsigned long iova,
 				struct scatterlist *sg, unsigned int nents,
 				int prot);
-extern size_t default_iommu_map_sg(struct iommu_domain *domain, unsigned long iova,
-			   struct scatterlist *sg,unsigned int nents, int prot);
+extern size_t default_iommu_map_sg(struct iommu_domain *domain,
+				   unsigned long iova,
+				   struct scatterlist *sg, unsigned int nents,
+				   int prot);
 extern phys_addr_t iommu_iova_to_phys(struct iommu_domain *domain, dma_addr_t iova);
 extern phys_addr_t iommu_iova_to_phys_hard(struct iommu_domain *domain,
 					   dma_addr_t iova);
@@ -500,7 +503,6 @@ int iommu_fwspec_init(struct device *dev, struct fwnode_handle *iommu_fwnode,
 void iommu_fwspec_free(struct device *dev);
 int iommu_fwspec_add_ids(struct device *dev, u32 *ids, int num_ids);
 const struct iommu_ops *iommu_ops_from_fwnode(struct fwnode_handle *fwnode);
-int iommu_fwspec_get_id(struct device *dev, u32 *id);
 int iommu_is_available(struct device *dev);
 
 #else /* CONFIG_IOMMU_API */
@@ -826,11 +828,6 @@ static inline
 const struct iommu_ops *iommu_ops_from_fwnode(struct fwnode_handle *fwnode)
 {
 	return NULL;
-}
-
-static inline int iommu_fwspec_get_id(struct device *dev, u32 *id)
-{
-	return -ENODEV;
 }
 
 static inline int iommu_is_available(struct device *dev)

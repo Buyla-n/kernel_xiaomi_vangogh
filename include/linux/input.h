@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 1999-2002 Vojtech Pavlik
- * Copyright (C) 2020 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -37,32 +36,12 @@ struct input_value {
 	__s32 value;
 };
 
-#ifdef CONFIG_LAST_TOUCH_EVENTS
-#define TOUCH_EVENT_MAX 512
-#define TOUCH_MAX_FINGER 10
-enum {
-	TOUCH_IS_INIT = 0,
-	TOUCH_IS_PRESSED,
-	TOUCH_IS_RELEASED,
+enum input_clock_type {
+	INPUT_CLK_REAL = 0,
+	INPUT_CLK_MONO,
+	INPUT_CLK_BOOT,
+	INPUT_CLK_MAX
 };
-
-struct touch_event {
-	struct timespec touch_time_stamp;
-	u32 touch_state;
-	__s32 finger_num;
-};
-
-struct touch_event_info {
-	u32 touch_event_num;
-	u32 touch_slot;
-	u32 finger_bitmap;
-	bool touch_is_pressed;
-#ifdef CONFIG_TOUCH_COUNT_DUMP
-	unsigned long long click_num;
-#endif
-	struct touch_event touch_event_buf[TOUCH_EVENT_MAX];
-};
-#endif
 
 /**
  * struct input_dev - represents an input device
@@ -145,6 +124,8 @@ struct touch_event_info {
  * @vals: array of values queued in the current frame
  * @devres_managed: indicates that devices is managed with devres framework
  *	and needs not be explicitly unregistered or freed.
+ * @timestamp: storage for a timestamp set by input_set_timestamp called
+ *  by a driver
  */
 struct input_dev {
 	const char *name;
@@ -215,9 +196,8 @@ struct input_dev {
 	struct input_value *vals;
 
 	bool devres_managed;
-#ifdef CONFIG_LAST_TOUCH_EVENTS
-	struct touch_event_info *touch_events;
-#endif
+
+	ktime_t timestamp[INPUT_CLK_MAX];
 };
 #define to_input_dev(d) container_of(d, struct input_dev, dev)
 
@@ -415,6 +395,9 @@ int input_open_device(struct input_handle *);
 void input_close_device(struct input_handle *);
 
 int input_flush_device(struct input_handle *handle, struct file *file);
+
+void input_set_timestamp(struct input_dev *dev, ktime_t timestamp);
+ktime_t *input_get_timestamp(struct input_dev *dev);
 
 void input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value);
 void input_inject_event(struct input_handle *handle, unsigned int type, unsigned int code, int value);

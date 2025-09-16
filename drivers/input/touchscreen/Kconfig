@@ -11,18 +11,6 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
-source "drivers/input/touchscreen/xiaomi/Kconfig"
-source "drivers/input/touchscreen/nt36672c/Kconfig"
-source "drivers/input/touchscreen/fts_521/Kconfig"
-
-config SECURE_TOUCH
-	bool "Secure Touch"
-	default y
-
-config I2C_BY_DMA
-	bool "I2C BY DMA"
-	default y
-
 config TOUCHSCREEN_PROPERTIES
 	def_tristate INPUT
 	depends on INPUT
@@ -107,6 +95,7 @@ config TOUCHSCREEN_AD7879_SPI
 config TOUCHSCREEN_ADC
 	tristate "Generic ADC based resistive touchscreen"
 	depends on IIO
+	select IIO_BUFFER
 	select IIO_BUFFER_CB
 	help
 	  Say Y here if you want to use the generic ADC
@@ -868,17 +857,6 @@ config TOUCHSCREEN_WM97XX_ZYLONITE
 	  To compile this driver as a module, choose M here: the
 	  module will be called zylonite-wm97xx.
 
-config SECURE_TOUCH_SYNAPTICS_DSX
-	bool "Secure Touch"
-	depends on TOUCHSCREEN_SYNAPTICS_DSX_I2C
-	help
-	  Say Y here to enable Secure Touch in supported driver.
-
-	  If unsure, say N.
-
-	  To compile the supported driver with Secure Touch enabled,
-	  choose M here.
-
 config TOUCHSCREEN_USB_COMPOSITE
 	tristate "USB Touchscreen Driver"
 	depends on USB_ARCH_HAS_HCD
@@ -1322,66 +1300,4 @@ config TOUCHSCREEN_ROHM_BU21023
 	  To compile this driver as a module, choose M here: the
 	  module will be called bu21023_ts.
 
-config TOUCHSCREEN_ST
-	tristate "STMicroelectronics Touchscreen Driver"
-	depends on I2C
-	default n
-	help
-	  Say Y here if you have a STMicroelectronics Touchscreen.
-
-	  If unsure, say N.
-	  To compile this driver as a module, choose M here: the
-	  module will be called st.
-
-source "drivers/input/touchscreen/st/Kconfig"
-
-config TOUCHSCREEN_ST_FTS_V521
-	tristate "STMicroelectronics Touchscreen Driver"
-	depends on I2C
-	default y
-	help
-	  Say Y here if you have a STMicroelectronics Touchscreen.
-
-	  If unsure, say N.
-	  To compile this driver as a module, choose M here: the
-	  module will be called fts_521.
-
-source "drivers/input/touchscreen/fts_521/Kconfig"
-
-config TOUCHSCREEN_SYNAPTICS_DSX
-	bool "Synaptics DSX Touchscreen Driver"
-	depends on I2C
-	default y
-	help
-	  Say Y here if you have a Synaptics Touchscreen.
-
-	  If unsure, say N.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called synaptics_dsx.
-
-source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
-
-config I2C_STATUS_FOR_TOUCH
-	bool "I2C Status for touch"
-	help
-		Say Y here if you use touch driver detect system i2c status when exit suspend state.
-		If unsure, say N.
-
-source "drivers/input/touchscreen/focaltech_touch/Kconfig"
-source "drivers/input/touchscreen/focaltouch/Kconfig"
-
-config TOUCHSCREEN_SYNAPTICS_TCM
-        bool "Synaptics TCM Touchscreen Driver"
-        depends on I2C
-        default y
-        help
-          Say Y here if you have a Synaptics Touchscreen.
-
-          If unsure, say N.
-
-          To compile this driver as a module, choose M here: the
-          module will be called synaptics_tcm.
-
-source "drivers/input/touchscreen/synaptics_tcm/Kconfig"
 endif

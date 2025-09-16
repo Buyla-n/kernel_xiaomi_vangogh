@@ -441,7 +441,6 @@ struct regulator_dev {
 	int exclusive;
 	u32 use_count;
 	u32 open_count;
-	u32 open_offset;
 	u32 bypass_count;
 
 	/* lists we belong to */
@@ -478,7 +477,6 @@ struct regulator_dev {
 	/* time when this regulator was disabled last time */
 	unsigned long last_off_jiffy;
 	struct proxy_consumer *proxy_consumer;
-	struct regulator *debug_consumer;
 };
 
 struct regulator_dev *
@@ -489,6 +487,7 @@ devm_regulator_register(struct device *dev,
 			const struct regulator_desc *regulator_desc,
 			const struct regulator_config *config);
 void regulator_unregister(struct regulator_dev *rdev);
+void regulator_sync_state(struct device *dev);
 void devm_regulator_unregister(struct device *dev, struct regulator_dev *rdev);
 
 int regulator_notifier_call_chain(struct regulator_dev *rdev,

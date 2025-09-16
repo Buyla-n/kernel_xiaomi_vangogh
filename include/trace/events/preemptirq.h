@@ -18,13 +18,13 @@ DECLARE_EVENT_CLASS(preemptirq_template,
 	TP_ARGS(ip, parent_ip),
 
 	TP_STRUCT__entry(
-		__field(u32, caller_offs)
-		__field(u32, parent_offs)
+		__field(s32, caller_offs)
+		__field(s32, parent_offs)
 	),
 
 	TP_fast_assign(
-		__entry->caller_offs = (u32)(ip - (unsigned long)_stext);
-		__entry->parent_offs = (u32)(parent_ip - (unsigned long)_stext);
+		__entry->caller_offs = (s32)(ip - (unsigned long)_stext);
+		__entry->parent_offs = (s32)(parent_ip - (unsigned long)_stext);
 	),
 
 	TP_printk("caller=%pF parent=%pF",
@@ -61,34 +61,6 @@ DEFINE_EVENT(preemptirq_template, preempt_enable,
 #define trace_preempt_enable_rcuidle(...)
 #define trace_preempt_disable_rcuidle(...)
 #endif
-
-TRACE_EVENT(irqs_disable,
-
-	TP_PROTO(u64 delta, unsigned long caddr0, unsigned long caddr1,
-				unsigned long caddr2, unsigned long caddr3),
-
-	TP_ARGS(delta, caddr0, caddr1, caddr2, caddr3),
-
-	TP_STRUCT__entry(
-		__field(u64, delta)
-		__field(void*, caddr0)
-		__field(void*, caddr1)
-		__field(void*, caddr2)
-		__field(void*, caddr3)
-	),
-
-	TP_fast_assign(
-		__entry->delta = delta;
-		__entry->caddr0 = (void *)caddr0;
-		__entry->caddr1 = (void *)caddr1;
-		__entry->caddr2 = (void *)caddr2;
-		__entry->caddr3 = (void *)caddr3;
-	),
-
-	TP_printk("delta=%llu(ns) Callers:(%ps<-%ps<-%ps<-%ps)", __entry->delta,
-					__entry->caddr0, __entry->caddr1,
-					__entry->caddr2, __entry->caddr3)
-);
 
 #endif /* _TRACE_PREEMPTIRQ_H */
 
